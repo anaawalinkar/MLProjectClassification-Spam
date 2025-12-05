@@ -158,7 +158,7 @@ Temporary Items
 *.pt
 *.pth
 
-#Output files (uncomment if you don't want to track output files)
+#Output files
 AwalinkarClassification*.txt
 AwalinkarSpam.txt
 

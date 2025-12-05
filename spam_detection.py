@@ -1,8 +1,3 @@
-"""
-Spam Email Detection: Classify emails as Spam or Ham
-Uses text preprocessing and multiple ML models
-"""
-
 import numpy as np
 import pandas as pd
 import os
@@ -17,18 +12,18 @@ import warnings
 warnings.filterwarnings('ignore')
 
 def preprocess_text(text):
-    """Preprocess text: lowercase, remove special chars, normalize"""
+    #Preprocess text: lowercase, remove special chars, normalize
     if pd.isna(text):
         return ""
     
     text = str(text).lower()
-    # Remove URLs
+    #remove URLs
     text = re.sub(r'http\S+|www\S+', '', text)
-    # Remove email addresses
+    #remove email addresses
     text = re.sub(r'\S+@\S+', '', text)
-    # Remove special characters but keep spaces
+    #remove special characters/keep spaces
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
-    # Remove extra whitespace
+    #remove extra whitespace
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text
@@ -37,17 +32,14 @@ def load_spam_data(file_path):
     """Load spam data from CSV file"""
     df = pd.read_csv(file_path)
     
-    # Handle different CSV formats
+    #handle different formats
     if 'v1' in df.columns:
-        # Format: v1 (label), v2 (text)
         df['label'] = df['v1'].map({'ham': 0, 'spam': 1})
         df['text'] = df['v2'].fillna('')
     elif 'label' in df.columns and 'text' in df.columns:
-        # Format: label, text
         df['label'] = df['label'].map({'ham': 0, 'spam': 1})
         df['text'] = df['text'].fillna('')
     elif 'label_num' in df.columns:
-        # Format: label_num (0=ham, 1=spam), text
         df['label'] = df['label_num']
         df['text'] = df['text'].fillna('')
     else:
@@ -104,7 +96,7 @@ def train_and_evaluate_models(X_train, y_train, X_test):
     best_name = None
     best_vectorizer = None
     
-    # Use stratified k-fold for imbalanced data
+    #use stratified k-fold 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
     for name, clf in classifiers.items():
@@ -132,15 +124,15 @@ def train_and_evaluate_models(X_train, y_train, X_test):
     
     print(f"\nSelected: {best_name} with CV F1-Score: {best_score:.4f}")
     
-    # Train the best classifier
+    #train best classifier
     print(f"Training {best_name}...")
     best_clf.fit(X_train_vec, y_train)
     
-    # Make predictions
+    #make predictions
     print("Making predictions...")
     predictions = best_clf.predict(X_test_vec)
     
-    # If we need probabilities for evaluation
+    #if we need probabilities for evaluation
     try:
         probabilities = best_clf.predict_proba(X_test_vec)[:, 1]
     except:
@@ -154,7 +146,7 @@ def main():
     print("Spam Email Detection")
     print("=" * 60)
     
-    # Load training data
+    #load training data
     print("\nLoading training data...")
     train1 = load_spam_data("Spam Email Detection/spam_train1.csv")
     train2 = load_spam_data("Spam Email Detection/spam_train2.csv")
@@ -164,24 +156,24 @@ def main():
     print(f"Train1 - Ham: {(train1['label'] == 0).sum()}, Spam: {(train1['label'] == 1).sum()}")
     print(f"Train2 - Ham: {(train2['label'] == 0).sum()}, Spam: {(train2['label'] == 1).sum()}")
     
-    # Combine training data
+    #combine training data
     train_combined = pd.concat([train1, train2], ignore_index=True)
     print(f"\nCombined training data shape: {train_combined.shape}")
     print(f"Combined - Ham: {(train_combined['label'] == 0).sum()}, Spam: {(train_combined['label'] == 1).sum()}")
     
-    # Preprocess text
+    #preprocess text
     print("\nPreprocessing text...")
     train_combined['text_processed'] = train_combined['text'].apply(preprocess_text)
     
-    # Load test data
+    #load test data
     print("\nLoading test data...")
     test_df = pd.read_csv("Spam Email Detection/spam_test.csv")
     
-    # Handle test data format
+    #handle test data format
     if 'message' in test_df.columns:
         test_df['text'] = test_df['message'].fillna('')
     elif 'text' not in test_df.columns:
-        # Try to find text column
+        #try to find text column
         for col in test_df.columns:
             if 'text' in col.lower() or 'message' in col.lower():
                 test_df['text'] = test_df[col].fillna('')
@@ -194,19 +186,19 @@ def main():
     
     print(f"Test data shape: {test_df.shape}")
     
-    # Prepare data
+    #prepare data
     X_train = train_combined['text_processed'].values
     y_train = train_combined['label'].values
     X_test = test_df['text_processed'].values
     
-    # Train and predict
+    #train and predict
     predictions, probabilities, model_name = train_and_evaluate_models(X_train, y_train, X_test)
     
-    # Convert predictions to labels (0=ham, 1=spam)
-    # Save as ham/spam strings
+    #convert predictions to labels (0=ham, 1=spam)
+    #save as ham/spam strings
     predictions_labels = ['ham' if p == 0 else 'spam' for p in predictions]
     
-    # Save predictions (saved in current working directory)
+    #save predictions (saved in current working directory)
     output_file = "AwalinkarSpam.txt"
     with open(output_file, 'w') as f:
         for label in predictions_labels:
@@ -218,7 +210,7 @@ def main():
     print(f"Ham predictions: {predictions_labels.count('ham')}")
     print(f"Spam predictions: {predictions_labels.count('spam')}")
     
-    # Print some statistics
+    #print statistics
     print(f"\nModel used: {model_name}")
 
 if __name__ == "__main__":

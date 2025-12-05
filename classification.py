@@ -1,8 +1,3 @@
-"""
-Classification Task: Predict class labels for 4 datasets
-Handles missing values (represented as 1.00000000000000e+99)
-"""
-
 import numpy as np
 import pandas as pd
 import os
@@ -13,27 +8,27 @@ from sklearn.model_selection import cross_val_score
 import warnings
 warnings.filterwarnings('ignore')
 
-# Missing value indicator
+#missing value indicator
 MISSING_VALUE = 1.00000000000000e+99
 
 def load_data(data_path, label_path=None):
     """Load data from text file, handling tab-separated values"""
-    # Read data as space/tab separated
+    #read data as space/tab separated
     data = pd.read_csv(data_path, sep='\s+', header=None)
     
-    # Convert to numpy array
+    #convert to numpy array
     data_array = data.values
     
-    # Handle missing values
+    #handle missing values
     data_array[data_array == MISSING_VALUE] = np.nan
     
-    # Fill missing values with median of each feature
+    # fill missing values with median of each feature
     for col in range(data_array.shape[1]):
         col_data = data_array[:, col]
         if np.isnan(col_data).any():
             median_val = np.nanmedian(col_data)
             if np.isnan(median_val):
-                median_val = 0.0  # If all values are missing, use 0
+                median_val = 0.0 
             data_array[np.isnan(data_array[:, col]), col] = median_val
     
     labels = None
@@ -49,12 +44,12 @@ def train_and_predict(train_data, train_labels, test_data, dataset_num):
     print(f"Test data shape: {test_data.shape}")
     print(f"Number of classes: {len(np.unique(train_labels))}")
     
-    # Standardize features
+    #standardize features
     scaler = StandardScaler()
     train_data_scaled = scaler.fit_transform(train_data)
     test_data_scaled = scaler.transform(test_data)
     
-    # Try multiple classifiers and select the best one
+    #try multiple classifiers and select the best one
     classifiers = {
         'RandomForest': RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1),
         'GradientBoosting': GradientBoostingClassifier(n_estimators=200, random_state=42),
@@ -67,7 +62,7 @@ def train_and_predict(train_data, train_labels, test_data, dataset_num):
     
     for name, clf in classifiers.items():
         try:
-            # Use cross-validation to select best model
+            #use cross-validation to select best model
             scores = cross_val_score(clf, train_data_scaled, train_labels, cv=5, scoring='accuracy')
             mean_score = scores.mean()
             print(f"  {name} CV Accuracy: {mean_score:.4f} (+/- {scores.std():.4f})")
@@ -81,16 +76,16 @@ def train_and_predict(train_data, train_labels, test_data, dataset_num):
             continue
     
     if best_clf is None:
-        # Fallback to RandomForest
+        #fallback to RandomForest
         best_clf = RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1)
         best_name = "RandomForest (fallback)"
     
     print(f"  Selected: {best_name} with CV accuracy: {best_score:.4f}")
     
-    # Train the best classifier
+    #train best classifier
     best_clf.fit(train_data_scaled, train_labels)
     
-    # Make predictions
+    #make predictions
     predictions = best_clf.predict(test_data_scaled)
     
     return predictions
