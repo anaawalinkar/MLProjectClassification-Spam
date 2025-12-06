@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split, GridSearchCV
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 import re
 import warnings
@@ -83,12 +83,36 @@ def train_and_evaluate_models(X_train, y_train, X_test):
     
     print(f"Feature matrix shape: {X_train_vec.shape}")
     
-    # Define classifiers
+    #define classifiers
     classifiers = {
-        'RandomForest': RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1),
-        'GradientBoosting': GradientBoostingClassifier(n_estimators=200, random_state=42),
-        'SVM': SVC(kernel='linear', probability=True, random_state=42),
-        'NaiveBayes': MultinomialNB(alpha=0.1)
+        'RandomForest': {
+            'base': RandomForestClassifier(random_state=42, n_jobs=-1),
+            'params': {
+                'n_estimators': [100, 200],
+                'max_depth': [10, 20, None],
+                'min_samples_split': [2, 5]
+            }
+        },
+        'GradientBoosting': {
+            'base': GradientBoostingClassifier(random_state=42),
+            'params': {
+                'n_estimators': [100, 200],
+                'learning_rate': [0.01, 0.1],
+                'max_depth': [3, 5]
+            }
+        },
+        'SVM': {
+            'base': SVC(kernel='linear', probability=True, random_state=42),
+            'params': {
+                'C': [0.1, 1, 10]
+            }
+        },
+        'NaiveBayes': {
+            'base': MultinomialNB(),
+            'params': {
+                'alpha': [0.1, 0.5, 1.0]
+            }
+        }
     }
     
     best_score = -1
@@ -99,17 +123,37 @@ def train_and_evaluate_models(X_train, y_train, X_test):
     #use stratified k-fold 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     
-    for name, clf in classifiers.items():
+    print("\nPerforming hyperparameter tuning for each model...")
+    for name, clf_config in classifiers.items():
         try:
-            print(f"\nEvaluating {name}...")
-            scores = cross_val_score(clf, X_train_vec, y_train, cv=cv, scoring='f1', n_jobs=-1)
-            mean_score = scores.mean()
-            std_score = scores.std()
-            print(f"  {name} CV F1-Score: {mean_score:.4f} (+/- {std_score:.4f})")
+            print(f"\nTuning {name}...")
+            # grid search with cross-validation
+            grid_search = GridSearchCV(
+                clf_config['base'],
+                clf_config['params'],
+                cv=cv,
+                scoring='f1',
+                n_jobs=-1,
+                verbose=0
+            )
+            grid_search.fit(X_train_vec, y_train)
+            
+            mean_score = grid_search.best_score_
+            std_score = cross_val_score(
+                grid_search.best_estimator_, 
+                X_train_vec, 
+                y_train, 
+                cv=cv, 
+                scoring='f1', 
+                n_jobs=-1
+            ).std()
+            
+            print(f"  {name} Best CV F1-Score: {mean_score:.4f} (+/- {std_score:.4f})")
+            print(f"  {name} Best Parameters: {grid_search.best_params_}")
             
             if mean_score > best_score:
                 best_score = mean_score
-                best_clf = clf
+                best_clf = grid_search.best_estimator_
                 best_name = name
                 best_vectorizer = vectorizer
         except Exception as e:
@@ -117,7 +161,8 @@ def train_and_evaluate_models(X_train, y_train, X_test):
             continue
     
     if best_clf is None:
-        # Fallback
+        #fallback - default RandomForest
+        print("\nNo model succeeded, using default RandomForest...")
         best_clf = RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1)
         best_name = "RandomForest (fallback)"
         best_vectorizer = vectorizer
@@ -128,8 +173,38 @@ def train_and_evaluate_models(X_train, y_train, X_test):
     print(f"Training {best_name}...")
     best_clf.fit(X_train_vec, y_train)
     
-    #make predictions
-    print("Making predictions...")
+    #evaluate on validation set
+    print("\nEvaluating model on validation set...")
+    X_train_final, X_val, y_train_final, y_val = train_test_split(
+        X_train_vec, y_train, test_size=0.2, random_state=42, stratify=y_train
+    )
+    
+    #retrain on training split
+    best_clf.fit(X_train_final, y_train_final)
+    val_predictions = best_clf.predict(X_val)
+    
+    #compute eval metrics
+    try:
+        val_probabilities = best_clf.predict_proba(X_val)[:, 1]
+        val_accuracy = accuracy_score(y_val, val_predictions)
+        val_precision = precision_score(y_val, val_predictions)
+        val_recall = recall_score(y_val, val_predictions)
+        val_f1 = f1_score(y_val, val_predictions)
+        val_roc_auc = roc_auc_score(y_val, val_probabilities)
+        
+        print(f"  Validation Accuracy: {val_accuracy:.4f}")
+        print(f"  Validation Precision: {val_precision:.4f}")
+        print(f"  Validation Recall: {val_recall:.4f}")
+        print(f"  Validation F1-Score: {val_f1:.4f}")
+        print(f"  Validation ROC-AUC: {val_roc_auc:.4f}")
+    except Exception as e:
+        print(f"  Could not compute all metrics: {str(e)}")
+    
+    #retrain for final predictions
+    best_clf.fit(X_train_vec, y_train)
+    
+    # predictions on test set
+    print("\nMaking predictions on test set...")
     predictions = best_clf.predict(X_test_vec)
     
     #if we need probabilities for evaluation
